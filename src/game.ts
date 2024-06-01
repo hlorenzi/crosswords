@@ -1,4 +1,4 @@
-import * as Words from "./words"
+import * as Wordlist from "./wordlist"
 
 
 export const MIN_WORD_LENGHT = 3
@@ -152,14 +152,20 @@ export function randomizeWalls(
             hasEnoughLengthTowards(x, y, 0, -1)
     }
 
-    const numWalls = (game.width + game.height) / 2
+    const numWalls = Math.ceil(
+        (game.width + game.height) / 2 * (0.5 + Math.random()))
 
     for (let w = 0; w < numWalls; w++)
     {
         let wallX, wallY;
 
+        let budget = 1000
         while (true)
         {
+            budget -= 1
+            if (budget <= 0)
+                return
+
             wallX = Math.floor(Math.random() * game.width)
             wallY = Math.floor(Math.random() * game.height)
             
@@ -180,15 +186,17 @@ export function randomizeWalls(
 
 
 export function randomizeWords(
-    game: Game)
+    game: Game,
+    wordlist: Wordlist.Wordlist)
     : boolean
 {
-    return randomizeWordsRecursive(game, 0, 0)
+    return randomizeWordsRecursive(game, wordlist, 0, 0)
 }
 
 
 function randomizeWordsRecursive(
     game: Game,
+    wordlist: Wordlist.Wordlist,
     x: number,
     y: number)
     : boolean
@@ -201,17 +209,17 @@ function randomizeWordsRecursive(
         yNext += 1
         if (yNext >= game.height)
         {
-            console.log("success!")
+            //console.log("success!")
             return true
         }
     }
 
     if (getCell(game, x, y) === CELL_WALL)
-        return randomizeWordsRecursive(game, xNext, yNext)
+        return randomizeWordsRecursive(game, wordlist, xNext, yNext)
 
     if (isValidCell(game, x - 1, y) &&
         getCell(game, x - 1, y) !== CELL_WALL)
-        return randomizeWordsRecursive(game, xNext, yNext)
+        return randomizeWordsRecursive(game, wordlist, xNext, yNext)
 
     const length = getWordLengthTowards(game, x, y, 1, 0)
 
@@ -220,11 +228,11 @@ function randomizeWordsRecursive(
     {
         const acrossLetter = getCell(game, x + across, y)
         matches[across] =
-            acrossLetter === CELL_EMPTY ? Words.MATCH_ANY :
+            acrossLetter === CELL_EMPTY ? Wordlist.MATCH_ANY :
             acrossLetter
     }
 
-    const wordList = [...Words.getWordList(length, matches)]
+    const wordList = [...Wordlist.getWords(wordlist, length, matches)]
 
     while (wordList.length > 0)
     {
@@ -244,14 +252,14 @@ function randomizeWordsRecursive(
             {
                 const downLetter = getCell(game, x + letter, y - toTop + down)
                 downMatches[down] =
-                    downLetter === CELL_EMPTY ? Words.MATCH_ANY :
+                    downLetter === CELL_EMPTY ? Wordlist.MATCH_ANY :
                     downLetter
 
                 if (down === toTop)
                     downMatches[down] = word[letter]
             }
 
-            const downWords = Words.getWordList(downLength, downMatches)
+            const downWords = Wordlist.getWords(wordlist, downLength, downMatches)
             if (downWords.length === 0)
                 hasDownMatch = false
             
@@ -274,11 +282,11 @@ function randomizeWordsRecursive(
             }
         }
 
-        console.log(`try: ${word}`)
-        console.log(`- down matches [${downLists.map(d => d.length).join(",")}] ex.: [${downLists.map(d => d[0]).join(", ")}]`)
-        console.log(print(game))
+        //console.log(`try: ${word}`)
+        //console.log(`- down matches [${downLists.map(d => d.length).join(",")}] ex.: [${downLists.map(d => d[0]).join(", ")}]`)
+        //console.log(print(game))
 
-        const result = randomizeWordsRecursive(game, xNext, yNext)
+        const result = randomizeWordsRecursive(game, wordlist, xNext, yNext)
         if (result)
             return true
         

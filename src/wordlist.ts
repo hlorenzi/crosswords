@@ -1,43 +1,45 @@
-import fs from "fs"
-
-
 export const MATCH_ANY = "*"
 
 
-const wordsByLength: string[][] = []
-
-
-export function init()
+export interface Wordlist
 {
-    if (wordsByLength.length !== 0)
-        return
-
-    const words = fs.readFileSync("./words.txt", "utf-8").split("\n")
-    for (const word of words)
-    {
-        while (wordsByLength.length <= word.length)
-            wordsByLength.push([])
-
-        wordsByLength[word.length].push(word)
-    }
+    wordsByLength: string[][]
+    cache: Map<string, string[]>
 }
 
 
-const cache = new Map<string, string[]>
+export function createFrom(str: string): Wordlist
+{
+    const wordlist: Wordlist = {
+        wordsByLength: [],
+        cache: new Map<string, string[]>(),
+    }
+
+    for (const line of str.split("\n"))
+    {
+        const word = line.trim()
+
+        while (wordlist.wordsByLength.length <= word.length)
+            wordlist.wordsByLength.push([])
+
+        wordlist.wordsByLength[word.length].push(word)
+    }
+
+    return wordlist
+}
 
 
-export function getWordList(
+export function getWords(
+    wordlist: Wordlist,
     length: number,
     wantedCells?: string[])
     : string[]
 {
-    init()
-
     if (length <= 0 ||
-        length >= wordsByLength.length)
+        length >= wordlist.wordsByLength.length)
         return []
 
-    const list = wordsByLength[length]
+    const list = wordlist.wordsByLength[length]
 
     if (list.length === 0)
         return []
@@ -47,7 +49,7 @@ export function getWordList(
         return list
 
     const cacheKey = wantedCells.join("")
-    const cached = cache.get(cacheKey)
+    const cached = wordlist.cache.get(cacheKey)
     if (cached !== undefined)
         return cached
     
@@ -71,17 +73,18 @@ export function getWordList(
         matches.push(word)
     }
     
-    cache.set(cacheKey, matches)
+    wordlist.cache.set(cacheKey, matches)
     return matches
 }
 
 
 export function getWord(
+    wordlist: Wordlist,
     length: number,
     wantedCells?: string[])
     : string | undefined
 {
-    const list = getWordList(length, wantedCells)
+    const list = getWords(wordlist, length, wantedCells)
     if (list.length === 0)
         return undefined
 
