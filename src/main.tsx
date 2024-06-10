@@ -22,7 +22,8 @@ function App()
 
 
 const AppRoot = styled.div`
-    text-align: center;
+    margin: auto;
+    width: fit-content;
 `
 
 

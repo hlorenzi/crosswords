@@ -76,8 +76,29 @@ export function typeInCell(editor: Editor, contents: string)
 export function eraseFromCell(editor: Editor)
 {
     const board = Game.clone(getBoard(editor))
+    
+    if (Game.getCell(board, editor.cursor.x, editor.cursor.y).contents === Game.CELL_EMPTY)
+        moveCursorToPrevious(editor, true)
+
     Game.setCell(board, editor.cursor.x, editor.cursor.y, Game.CELL_EMPTY)
-    moveCursorToPrevious(editor, true)
+
+    setBoard(editor, board)
+}
+
+
+export function setCluePrompt(
+    editor: Editor,
+    clueIndex: number,
+    isDown: boolean,
+    prompt: string)
+{
+    const board = Game.clone(getBoard(editor))
+    const clueNumber = board.clueNumbers[clueIndex]
+    const clue = isDown ? clueNumber.down : clueNumber.across
+    if (!clue)
+        return
+
+    clue.prompt = prompt
     setBoard(editor, board)
 }
 
@@ -109,6 +130,27 @@ export function isInCursorsRange(
     } 
     
     return false
+}
+
+
+export function moveCursor(editor: Editor, xDelta: number, yDelta: number)
+{
+    const board = getBoard(editor)
+
+    editor.cursor.x += xDelta
+    editor.cursor.y += yDelta
+    
+    if (editor.cursor.x < 0)
+        editor.cursor.x = board.width - 1
+
+    if (editor.cursor.x >= board.width)
+        editor.cursor.x = 0
+
+    if (editor.cursor.y < 0)
+        editor.cursor.y = board.height - 1
+
+    if (editor.cursor.y >= board.height)
+        editor.cursor.y = 0
 }
 
 
@@ -153,7 +195,7 @@ export function moveCursorToNext(editor: Editor, skipWalls: boolean)
         }
 
         if (!skipWalls ||
-            Game.getCell(board, editor.cursor.x, editor.cursor.y) !== Game.CELL_WALL)
+            Game.getCell(board, editor.cursor.x, editor.cursor.y).contents !== Game.CELL_WALL)
             break
     }
 }
@@ -197,7 +239,7 @@ export function moveCursorToPrevious(editor: Editor, skipWalls: boolean)
         }
 
         if (!skipWalls ||
-            Game.getCell(board, editor.cursor.x, editor.cursor.y) !== Game.CELL_WALL)
+            Game.getCell(board, editor.cursor.x, editor.cursor.y).contents !== Game.CELL_WALL)
             break
     }
 }

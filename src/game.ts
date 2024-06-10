@@ -11,7 +11,39 @@ export interface Game
 {
     width: number
     height: number
-    cells: string[][]
+    cells: Cell[][]
+    clueNumbers: ClueNumber[]
+}
+
+
+export interface Cell
+{
+    contents: string
+    acrossClueIndex?: number
+    downClueIndex?: number
+}
+
+
+export interface CellIndex
+{
+    x: number
+    y: number
+}
+
+
+export interface ClueNumber
+{
+    number: number
+    cellIndex: CellIndex
+    across?: Clue
+    down?: Clue
+}
+
+
+export interface Clue
+{
+    prompt: string
+    answerLength: number
 }
 
 
@@ -20,21 +52,32 @@ export function createEmpty(
     height: number)
     : Game
 {
-    const cells: string[][] = []
+    const cells: Cell[][] = []
     for (let j = 0; j < height; j++)
     {
-        const row: string[] = []
+        const row: Cell[] = []
         for (let i = 0; i < width; i++)
-            row.push(CELL_EMPTY)
+        {
+            row.push({
+                contents: CELL_EMPTY,
+                acrossClueIndex: 0,
+                downClueIndex: 0,
+            })
+        }
 
         cells.push(row)
     }
 
-    return {
+    const game: Game = {
         width,
         height,
         cells,
+        clueNumbers: [],
     }
+
+    redistributeClues(game)
+
+    return game
 }
 
 
@@ -42,21 +85,28 @@ export function clone(
     game: Game)
     : Game
 {
-    const cells: string[][] = []
+    const cells: Cell[][] = []
     for (let j = 0; j < game.height; j++)
     {
-        const row: string[] = []
+        const row: Cell[] = []
         for (let i = 0; i < game.width; i++)
-            row.push(getCell(game, i, j))
+        {
+            row.push({ ...getCell(game, i, j) })
+        }
 
         cells.push(row)
     }
 
-    return {
+    const newGame: Game = {
         width: game.width,
         height: game.height,
         cells,
+        clueNumbers: [...game.clueNumbers],
     }
+
+    redistributeClues(newGame)
+
+    return newGame
 }
 
 
@@ -74,7 +124,7 @@ export function getCell(
     game: Game,
     x: number,
     y: number)
-    : string
+    : Cell
 {
     return game.cells[y][x]
 }
@@ -86,7 +136,16 @@ export function setCell(
     y: number,
     contents: string)
 {
-    game.cells[y][x] = contents
+    const cell = getCell(game, x, y)
+    const prevContents = cell.contents
+
+    cell.contents = contents
+
+    if (contents === CELL_WALL ||
+        prevContents === CELL_WALL)
+    {
+        redistributeClues(game)
+    }
 }
 
 
@@ -109,6 +168,116 @@ export function print(
 }
 
 
+export function calculateClueNumbers(
+    game: Game)
+    : ClueNumber[]
+{
+    const clueNumbers: ClueNumber[] = []
+
+    for (let y = 0; y < game.width; y++)
+    {
+        for (let x = 0; x < game.height; x++)
+        {
+            if (getCell(game, x, y).contents === CELL_WALL)
+                continue
+
+            const hasAcross =
+                !isValidCell(game, x - 1, y) ||
+                getCell(game, x - 1, y).contents === CELL_WALL
+            
+            const hasDown =
+                !isValidCell(game, x, y - 1) ||
+                getCell(game, x, y - 1).contents === CELL_WALL
+
+            if (!hasAcross && !hasDown)
+                continue
+
+            clueNumbers.push({
+                number: clueNumbers.length + 1,
+                cellIndex: { x, y },
+                across: !hasAcross ? undefined : {
+                    prompt: "",
+                    answerLength: getWordLengthTowards(game, x, y, 1, 0),
+                },
+                down: !hasDown ? undefined : {
+                    prompt: "",
+                    answerLength: getWordLengthTowards(game, x, y, 0, 1),
+                },
+            })
+        }
+    }
+
+    return clueNumbers
+}
+
+
+export function redistributeClues(
+    game: Game)
+{
+    const oldClueNumbers = game.clueNumbers
+
+    game.clueNumbers = calculateClueNumbers(game)
+
+    // Integrate previous clue prompts
+    for (let c = 0; c < oldClueNumbers.length; c++)
+    {
+        const old = oldClueNumbers[c]
+
+        if (old.across)
+        {
+            const newAcross = game.clueNumbers.find(clue =>
+                clue.across &&
+                clue.cellIndex.x === old.cellIndex.x &&
+                clue.cellIndex.y === old.cellIndex.y)
+
+            if (newAcross)
+                newAcross.across!.prompt = old.across.prompt
+        }
+
+        if (old.down)
+        {
+            const newDown = game.clueNumbers.find(clue =>
+                clue.down &&
+                clue.cellIndex.x === old.cellIndex.x &&
+                clue.cellIndex.y === old.cellIndex.y)
+
+            if (newDown)
+                newDown.down!.prompt = old.down.prompt
+        }
+    }
+
+    // Clear cell references
+    for (let y = 0; y < game.width; y++)
+    {
+        for (let x = 0; x < game.height; x++)
+        {
+            const cell = getCell(game, x, y)
+            cell.acrossClueIndex = undefined
+            cell.downClueIndex = undefined
+        }
+    }
+
+    // Set up cell references
+    for (let c = 0; c < game.clueNumbers.length; c++)
+    {
+        const clue = game.clueNumbers[c]
+        const start = clue.cellIndex
+
+        if (clue.across)
+        {
+            for (let l = 0; l < clue.across.answerLength; l++)
+                getCell(game, start.x + l, start.y).acrossClueIndex = c
+        }
+
+        if (clue.down)
+        {
+            for (let l = 0; l < clue.down.answerLength; l++)
+                getCell(game, start.x, start.y + l).downClueIndex = c
+        }
+    }
+}
+
+
 export function getWordLengthTowards(
     game: Game,
     x: number,
@@ -126,7 +295,7 @@ export function getWordLengthTowards(
         if (!isValidCell(game, xCell, yCell))
             break
 
-        if (getCell(game, xCell, yCell) === CELL_WALL)
+        if (getCell(game, xCell, yCell).contents === CELL_WALL)
             break
 
         length += 1
@@ -169,7 +338,7 @@ export function randomizeWalls(
             wallX = Math.floor(Math.random() * game.width)
             wallY = Math.floor(Math.random() * game.height)
             
-            if (getCell(game, wallX, wallY) === CELL_WALL)
+            if (getCell(game, wallX, wallY).contents === CELL_WALL)
                 continue
 
             if (!checkEnoughLengths(wallX, wallY) ||
@@ -214,11 +383,11 @@ function randomizeWordsRecursive(
         }
     }
 
-    if (getCell(game, x, y) === CELL_WALL)
+    if (getCell(game, x, y).contents === CELL_WALL)
         return randomizeWordsRecursive(game, wordlist, xNext, yNext)
 
     if (isValidCell(game, x - 1, y) &&
-        getCell(game, x - 1, y) !== CELL_WALL)
+        getCell(game, x - 1, y).contents !== CELL_WALL)
         return randomizeWordsRecursive(game, wordlist, xNext, yNext)
 
     const length = getWordLengthTowards(game, x, y, 1, 0)
@@ -226,7 +395,7 @@ function randomizeWordsRecursive(
     const matches = new Array<string>(length)
     for (let across = 0; across < length; across++)
     {
-        const acrossLetter = getCell(game, x + across, y)
+        const acrossLetter = getCell(game, x + across, y).contents
         matches[across] =
             acrossLetter === CELL_EMPTY ? Wordlist.MATCH_ANY :
             acrossLetter
@@ -250,7 +419,7 @@ function randomizeWordsRecursive(
             const downMatches = new Array<string>(downLength)
             for (let down = 0; down < downLength; down++)
             {
-                const downLetter = getCell(game, x + letter, y - toTop + down)
+                const downLetter = getCell(game, x + letter, y - toTop + down).contents
                 downMatches[down] =
                     downLetter === CELL_EMPTY ? Wordlist.MATCH_ANY :
                     downLetter

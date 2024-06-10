@@ -21,12 +21,69 @@ export function EditPanel(props: {
         })
     })
 
+    const currentClue = Solid.createMemo(() => {
+        const board = Editor.getBoard(props.editor)
+        const cell = Game.getCell(board, props.editor.cursor.x, props.editor.cursor.y)
+        const clueIndex =
+            props.editor.cursorVertical ? cell.downClueIndex :
+            cell.acrossClueIndex
+
+        if (clueIndex === undefined)
+            return undefined
+
+        const clueNumber = board.clueNumbers[clueIndex]
+        const clue =
+            props.editor.cursorVertical ? clueNumber.down :
+            clueNumber.across
+
+        if (clue === undefined)
+            return undefined
+
+        return {
+            index: clueIndex,
+            number: clueNumber.number,
+            isDown: props.editor.cursorVertical,
+            clue,
+        }
+    })
+
+    const rewriteCluePrompt = Solid.createMemo(() => () => {
+        const clue = currentClue()
+        if (!clue)
+            return
+
+        const clueNumber = clue.number + "-" + (clue.isDown ? "D" : "A")
+        const prompt = window.prompt(`Clue for ${clueNumber}?`, clue.clue.prompt)
+        if (prompt === null)
+            return
+
+        Editor.setCluePrompt(
+            props.editor,
+            clue.index,
+            clue.isDown,
+            prompt)
+        props.setEditor()
+    })
+
     return <EditPanelRoot>
         <GameBoard
             game={Editor.getBoard(props.editor)}
             editor={props.editor}
             setEditor={props.setEditor}
         />
+
+        <ClueStripRoot onClick={rewriteCluePrompt()}>
+            { currentClue() === undefined ? null :
+                <>
+                <ClueNumber>
+                    { currentClue()!.number.toString() + "-" +
+                        (currentClue()!.isDown ? "D" : "A") }
+                </ClueNumber>
+                <br/>
+                { currentClue()!.clue.prompt }
+                </>
+            }
+        </ClueStripRoot>
 
         <button onClick={() => {
             Editor.clearBoard(props.editor)
@@ -58,13 +115,12 @@ function handleKeyDown(
     editor: Editor.Editor,
     setEditor: () => void)
 {
-    const letterCode = ev.key.toUpperCase().charCodeAt(0)
+    const letter = ev.key.toUpperCase()
 
     if (ev.key.length === 1 &&
-        letterCode >= "A".charCodeAt(0) &&
-        letterCode <= "Z".charCodeAt(0))
+        RegExp(/^\p{L}/, "u").test(letter))
     {
-        Editor.typeInCell(editor, String.fromCharCode(letterCode))
+        Editor.typeInCell(editor, letter)
         setEditor()
         return
     }
@@ -96,9 +152,54 @@ function handleKeyDown(
         setEditor()
         return
     }
+    
+    if (ev.key === "ArrowUp")
+    {
+        Editor.moveCursor(editor, 0, -1)
+        setEditor()
+        return
+    }
+    
+    if (ev.key === "ArrowDown")
+    {
+        Editor.moveCursor(editor, 0, 1)
+        setEditor()
+        return
+    }
+    
+    if (ev.key === "ArrowLeft")
+    {
+        Editor.moveCursor(editor, -1, 0)
+        setEditor()
+        return
+    }
+    
+    if (ev.key === "ArrowRight")
+    {
+        Editor.moveCursor(editor, 1, 0)
+        setEditor()
+        return
+    }
 }
 
 
 const EditPanelRoot = styled.div`
-    
+    margin-top: 1em;
+    margin-left: auto;
+    margin-right: auto;
+`
+
+
+const ClueStripRoot = styled.div`
+    width: 100%;
+    min-height: 3em;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    padding: 0.5em 1em;
+    background-color: #dcefff;
+`
+
+
+const ClueNumber = styled.span`
+    font-weight: bold;
 `
